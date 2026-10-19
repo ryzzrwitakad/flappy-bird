@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flappy Bird</title>
+<style>
+:root{--bg:#f3efe6;--ink:#1f2a33;--card:#ffffff;--muted:#5d6b76;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10181f;--ink:#e8eef2;--card:#18232c;--muted:#9fb0bc;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10181f;--ink:#e8eef2;--card:#18232c;--muted:#9fb0bc;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:12px;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+h1{margin:0;font-size:1.3rem;letter-spacing:.02em}
+.hud{display:flex;gap:20px;color:var(--muted);font-size:.95rem}
+.hud b{color:var(--ink)}
+#wrap{width:min(100%,360px);aspect-ratio:360/540;max-height:calc(100% - 90px);border-radius:14px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.25);background:#70c5ce}
+canvas{display:block;width:100%;height:100%;cursor:pointer}
+p.tip{margin:0;font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<h1>Flappy Bird</h1>
+<div class="hud"><span>Score <b id="s">0</b></span><span>Best <b id="b">0</b></span></div>
+<div id="wrap"><canvas id="c" width="360" height="540"></canvas></div>
+<p class="tip">Tap, click or press Space to flap</p>
+<script>
+(function(){
+const cv=document.getElementById('c'),x=cv.getContext('2d');
+const W=360,H=540,GROUND=90,GAP=140,PW=56,SPEED=2.2,G=0.38,FLAP=-6.6;
+let best=0;try{best=+localStorage.getItem('flappy-best')||0}catch(e){}
+document.getElementById('b').textContent=best;
+let state='ready',bird,pipes,score,frame,flash=0,gx=0;
+function reset(){bird={x:90,y:H/2-GROUND/2,v:0,r:13};pipes=[];score=0;frame=0;document.getElementById('s').textContent=0}
+function flap(){
+  if(state==='ready'){state='play';bird.v=FLAP}
+  else if(state==='play'){bird.v=FLAP}
+  else if(state==='over'&&flash<=0){reset();state='ready'}
+}
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();flap()}});
+cv.addEventListener('pointerdown',e=>{e.preventDefault();flap()});
+function spawn(){
+  const min=60,max=H-GROUND-GAP-60;
+  pipes.push({x:W,top:min+Math.random()*(max-min),passed:false});
+}
+function die(){
+  state='over';flash=12;
+  if(score>best){best=score;try{localStorage.setItem('flappy-best',best)}catch(e){}document.getElementById('b').textContent=best}
+}
+function update(){
+  gx=(gx+SPEED)%24;
+  if(state==='ready'){bird.y=H/2-GROUND/2+Math.sin(Date.now()/250)*8;return}
+  if(flash>0)flash--;
+  if(state==='over'){
+    if(bird.y<H-GROUND-bird.r){bird.v+=G;bird.y+=bird.v;if(bird.y>H-GROUND-bird.r)bird.y=H-GROUND-bird.r}
+    return;
+  }
+  frame++;
+  bird.v+=G;bird.y+=bird.v;
+  if(frame%90===1)spawn();
+  for(const p of pipes){
+    p.x-=SPEED;
+    if(!p.passed&&p.x+PW<bird.x){p.passed=true;score++;document.getElementById('s').textContent=score}
+    const inX=bird.x+bird.r-3>p.x&&bird.x-bird.r+3<p.x+PW;
+    if(inX&&(bird.y-bird.r+3<p.top||bird.y+bird.r-3>p.top+GAP))die();
+  }
+  pipes=pipes.filter(p=>p.x>-PW);
+  if(bird.y+bird.r>=H-GROUND){bird.y=H-GROUND-bird.r;die()}
+  if(bird.y-bird.r<0){bird.y=bird.r;bird.v=0}
+}
+function pipe(px,y,h,cap){
+  x.fillStyle='#5fb04a';x.fillRect(px,y,PW,h);
+  x.fillStyle='#82d36a';x.fillRect(px+5,y,8,h);
+  x.fillStyle='#3f8a33';x.fillRect(px+PW-8,y,8,h);
+  x.strokeStyle='#2b5f23';x.lineWidth=2;x.strokeRect(px,y,PW,h);
+  const cy=cap==='bottom'?y+h-22:y;
+  x.fillStyle='#5fb04a';x.fillRect(px-4,cy,PW+8,22);
+  x.strokeRect(px-4,cy,PW+8,22);
+}
+function draw(){
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#5ab6d6');g.addColorStop(1,'#bfe9ef');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.fillStyle='rgba(255,255,255,.8)';
+  [[60,90,22],[78,84,18],[240,140,24],[262,134,18],[150,200,16]].forEach(c=>{x.beginPath();x.arc(c[0],c[1],c[2],0,7);x.fill()});
+  for(const p of pipes){pipe(p.x,0,p.top,'bottom');pipe(p.x,p.top+GAP,H-GROUND-p.top-GAP,'top')}
+  x.fillStyle='#ded895';x.fillRect(0,H-GROUND,W,GROUND);
+  x.fillStyle='#7ec850';x.fillRect(0,H-GROUND,W,14);
+  x.fillStyle='#5fa63a';
+  for(let i=-24;i<W+24;i+=24)x.fillRect(i-gx,H-GROUND+4,12,6);
+  x.fillStyle='#c9bf7a';x.fillRect(0,H-GROUND+14,W,3);
+  // bird
+  x.save();x.translate(bird.x,bird.y);
+  x.rotate(Math.max(-.5,Math.min(1.2,bird.v*.07)));
+  x.fillStyle='#f7c531';x.beginPath();x.ellipse(0,0,bird.r+3,bird.r,0,0,7);x.fill();
+  x.strokeStyle='#8a6a10';x.lineWidth=2;x.stroke();
+  const fl=state==='play'&&bird.v<0?-5:3;
+  x.fillStyle='#f2a71a';x.beginPath();x.ellipse(-4,fl,7,4.5,0,0,7);x.fill();x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.arc(7,-4,5,0,7);x.fill();
+  x.fillStyle='#111';x.beginPath();x.arc(9,-4,2.2,0,7);x.fill();
+  x.fillStyle='#e8532b';x.beginPath();x.moveTo(11,1);x.lineTo(21,4);x.lineTo(11,8);x.closePath();x.fill();
+  x.restore();
+  // text
+  x.textAlign='center';x.lineJoin='round';
+  function label(t,y,sz){x.font='bold '+sz+'px "Trebuchet MS",sans-serif';x.lineWidth=5;x.strokeStyle='#1f2a33';x.strokeText(t,W/2,y);x.fillStyle='#fff';x.fillText(t,W/2,y)}
+  if(state==='play')label(score,70,44);
+  if(state==='ready'){label('Get ready',150,34);label('Tap to flap',190,20)}
+  if(state==='over'){
+    label('Game over',170,38);label('Score '+score+'   Best '+best,215,22);
+    if(flash<=0)label('Tap to retry',260,20);
+  }
+  if(flash>0){x.fillStyle='rgba(255,255,255,'+(flash/18)+')';x.fillRect(0,0,W,H)}
+}
+reset();
+let last=0,acc=0;
+function loop(t){
+  acc+=Math.min(50,t-last);last=t;
+  while(acc>=1000/60){update();acc-=1000/60}
+  draw();requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
